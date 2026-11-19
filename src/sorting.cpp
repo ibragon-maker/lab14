@@ -1,6 +1,66 @@
-// =---- yours (Lab 14) ----------------------------------------------------
-// Each function below is a stub so the program builds. Replace the bodies.
-// Counting convention: see sorting.h.
+#include "sorting.h"
+
+bool score_descending(const ScoreEntry &a, const ScoreEntry &b) {
+    return a.score > b.score;
+}
+
+bool name_ascending(const ScoreEntry &a, const ScoreEntry &b) {
+    return a.name < b.name;
+}
+
+
+namespace {
+
+/// Merge data[low..mid) and data[mid..high) into one sorted run, using
+/// scratch as temporary space. Takes from the left run unless the right
+/// element strictly belongs first, which keeps equal elements in order.
+void merge_runs(ScoreEntry *data, ScoreEntry *scratch, int low, int mid,
+                int high, Comparator before, long &comparisons) {
+    int left = low;
+    int right = mid;
+    int out = low;
+    while (left < mid && right < high) {
+        ++comparisons;
+        if (before(data[right], data[left])) {
+            scratch[out++] = data[right++];
+        } else {
+            scratch[out++] = data[left++];
+        }
+    }
+    while (left < mid) {
+        scratch[out++] = data[left++];
+    }
+    while (right < high) {
+        scratch[out++] = data[right++];
+    }
+    for (int i = low; i < high; ++i) {
+        data[i] = scratch[i];
+    }
+}
+
+void merge_sort_range(ScoreEntry *data, ScoreEntry *scratch, int low, int high,
+                      Comparator before, long &comparisons) {
+    if (high - low < 2) {
+        return;
+    }
+    const int mid = low + (high - low) / 2;
+    merge_sort_range(data, scratch, low, mid, before, comparisons);
+    merge_sort_range(data, scratch, mid, high, before, comparisons);
+    merge_runs(data, scratch, low, mid, high, before, comparisons);
+}
+
+} 
+
+void merge_sort(ScoreEntry *data, int count, Comparator before,
+                long &comparisons) {
+    if (count < 2) {
+        return;
+    }
+    ScoreEntry *scratch = new ScoreEntry[count];
+    merge_sort_range(data, scratch, 0, count, before, comparisons);
+    delete[] scratch;
+}
+
 
 /// Sort in place by repeatedly selecting the first element that belongs next.
 /// @param data the array to sort
@@ -10,28 +70,56 @@
 void selection_sort(ScoreEntry *data, int count, Comparator before,
                     long &comparisons) {
     for (int i = 0; i < count - 1; ++i) {
-        int min_or_max_idx = i;
+        int best_idx = i;
         for (int j = i + 1; j < count; ++j) {
-            // Count every element comparison via the Comparator
             ++comparisons;
-            if (before(data[j], data[min_or_max_idx])) {
-                min_or_max_idx = j;
+            if (before(data[j], data[best_idx])) {
+                best_idx = j;
             }
         }
-        if (min_or_max_idx != i) {
+        if (best_idx != i) {
             ScoreEntry temp = data[i];
-            data[i] = data[min_or_max_idx];
-            data[min_or_max_idx] = temp;
+            data[i] = data[best_idx];
+            data[best_idx] = temp;
         }
     }
 }
 
+/// Sort in place by inserting each element into the sorted part before it.
+/// Shift elements; do not swap.
+/// @pre data points to at least count valid ScoreEntry elements
+/// @param data the array to sort
+/// @param count the number of elements
+/// @param before the ordering comparator
+/// @param comparisons comparisons increased by the number of comparisons made
+void insertion_sort(ScoreEntry *data, int count, Comparator before,
+                    long &comparisons) {
+    for (int i = 1; i < count; ++i) {
+        ScoreEntry current = data[i];
+        int pos = i - 1;
+
+        while (pos >= 0) {
+            ++comparisons;
+            if (before(current, data[pos])) {
+                data[pos + 1] = data[pos];
+                --pos;
+            } else {
+                break;
+            }
+        }
+        data[pos + 1] = current;
+    }
+}
+
 /// Look for a name from the front.
+/// @param data the array to search
+/// @param count the number of elements
+/// @param name the target player name
+/// @param comparisons comparisons increased by the number of comparisons made
 /// @return the index of the first entry with that name, or -1
 int linear_search_name(const ScoreEntry *data, int count,
                        const std::string &name, long &comparisons) {
     for (int i = 0; i < count; ++i) {
-        // Count name comparisons
         ++comparisons;
         if (data[i].name == name) {
             return i;
@@ -42,6 +130,10 @@ int linear_search_name(const ScoreEntry *data, int count,
 
 /// Look for a name by halving the range.
 /// @pre data is sorted with name_ascending
+/// @param data the sorted array to search
+/// @param count the number of elements
+/// @param name the target player name
+/// @param comparisons comparisons increased by the number of comparisons made
 /// @return the index of an entry with that name, or -1
 int binary_search_name(const ScoreEntry *data, int count,
                        const std::string &name, long &comparisons) {
@@ -50,14 +142,12 @@ int binary_search_name(const ScoreEntry *data, int count,
 
     while (low <= high) {
         int mid = low + (high - low) / 2;
-        
-        // Count comparison between data[mid].name and name
+
         ++comparisons;
         if (data[mid].name == name) {
             return mid;
         }
 
-        // Count comparison to determine direction (using name_ascending logic via comparator or direct string comparison)
         ++comparisons;
         if (name < data[mid].name) {
             high = mid - 1;
